@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Reader</title>
+    <style>
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    transition: background-color 0.3s;
+    background-color: #f0f0f0;
+    padding: 10px; /* Reduced padding */
+}
+
+.comic-reader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 1200px;
+    width: 100%;
+    padding: 10px; /* Reduced padding */
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.image-container {
+    overflow: hidden;
+    /* border: 2px solid #333; */
+    border-radius: 8px;
+    margin-bottom: 10px; /* Reduced margin */
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    position: relative;
+    aspect-ratio: 16/9; /* Maintain aspect ratio */
+    max-height: 600px;   /* Prevent overflow */
+}
+
+img {
+    height: 100%;
+    display: block;
+    transition: transform 0.3s ease;
+    border-radius: 8px;
+
+}
+
+img.zoomed {
+    cursor: zoom-out; /* Change cursor on zoom */
+    transform: scale(2); /* Adjust the scale factor if needed */
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping of controls */
+    justify-content: center;
+    gap: 5px; /* Reduced gap */
+    margin-bottom: 10px;
+}
+
+button {
+    padding: 8px 12px; /* Smaller padding for buttons */
+    font-size: 14px; /* Reduced font size */
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: white;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+.page-jump {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin: 5px 0; /* Reduced margin */
+}
+
+#page-input {
+    padding: 6px;
+    width: 40px; /* Smaller width */
+    font-size: 14px; /* Reduced font size */
+}
+
+#progress-indicator {
+    font-size: 14px; /* Reduced font size */
+}
+
+.bookmark-list {
+    margin-top: 15px; /* Reduced margin */
+    width: 100%;
+    max-width: 600px;
+}
+
+.bookmark-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px; /* Smaller padding */
+    background-color: #f8f9fa;
+    margin: 3px 0; /* Reduced margin */
+    border-radius: 5px;
+}
+body.dark-mode{
+    background-color: #000;
+}
+body.dark-mode .comic-reader {
+    background-color: #1e1e1e;
+}
+
+body.dark-mode .bookmark-item {
+    background-color: #2d2d2d;
+    color: #fff;
+}
+
+@media (max-width: 600px) {
+    .controls {
+        flex-direction: row;
+        align-items: stretch;
+    }
+
+    .page-jump {
+        flex-direction: row; /* Keep row for smaller screens */
+    }
+
+    /* #page-input {
+        width: 100%;
+    } */
+
+    .bookmark-item {
+        flex-direction: column;
+        gap: 5px; /* Reduced gap */
+    }
+
+.image-container {
+    /* Maintain aspect ratio */
+    height: 500px;   /* Prevent overflow */
+}
+
+img {
+    height: 100%;
+  
+}
+
+}
+
+@media (max-width: 480px) {
+    button {
+        font-size: 12px; /* Further reduce button size for smaller screens */
+        padding: 6px 10px; /* Adjust button padding */
+    }
+
+    /* #page-input {
+        width: 100%; 
+    } */
+
+    #progress-indicator {
+        font-size: 12px; /* Further reduce font size */
+    }
+}
+
+    </style>
+</head>
+<body>
+    <div class="comic-reader">
+        <div class="image-container">
+            <img id="comic-image" src="src/img(0).jpg" alt="Comic Page">
+        </div>
+        <div class="controls">
+            <button id="prev-button" aria-label="Previous page (Left arrow)">◄</button>
+            <div class="page-jump">
+                <input type="text" id="page-input" min="1" max="1105">
+                <button id="go-to-page">Go to Page</button>
+            </div>
+            <button id="next-button" aria-label="Next page (Right arrow)">►</button>
+            <button id="fullscreen-button" aria-label="Toggle fullscreen (F)">Fullscreen</button>
+            <button id="dark-mode-button" aria-label="Toggle dark mode (D)">Dark Mode</button>
+            <button id="bookmark-button" aria-label="Add bookmark (B)">Bookmark</button>
+            <button id="zoom-button" aria-label="Toggle zoom (Z)">Zoom</button>
+        </div>
+        <div id="progress-indicator">Page 1 of 1105</div>
+        <div class="bookmark-list" id="bookmark-list"></div>
+    </div>
+<script src="src.js"></script>
+    <script>
+        let currentIndex = 0;
+        let bookmarks = JSON.parse(localStorage.getItem('comicBookmarks')) || [];
+        let isZoomed = false;
+
+        const comicImage = document.getElementById('comic-image');
+        const prevButton = document.getElementById('prev-button');
+        const nextButton = document.getElementById('next-button');
+        const fullscreenButton = document.getElementById('fullscreen-button');
+        const darkModeButton = document.getElementById('dark-mode-button');
+        const bookmarkButton = document.getElementById('bookmark-button');
+        const zoomButton = document.getElementById('zoom-button');
+        const progressIndicator = document.getElementById('progress-indicator');
+        const pageInput = document.getElementById('page-input');
+        const goToPageButton = document.getElementById('go-to-page');
+        const bookmarkList = document.getElementById('bookmark-list');
+
+        // Initialize dark mode from localStorage
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+        }
+
+        function updateImage() {
+            comicImage.src = `${imgsrc[currentIndex]}`;
+            comicImage.onload = function() {
+                progressIndicator.textContent = `Page ${currentIndex + 1} of 1105`;
+                pageInput.value = currentIndex + 1;
+                localStorage.setItem('lastPage', currentIndex);
+            };
+            comicImage.onerror = function() {
+                comicImage.src = 'src/placeholder.jpg'; // Placeholder image
+                progressIndicator.textContent = 'Image not found';
+            };
+        }
+
+        function updateBookmarkList() {
+            bookmarkList.innerHTML = '';
+            bookmarks.forEach((bookmark, index) => {
+                const bookmarkItem = document.createElement('div');
+                bookmarkItem.className = 'bookmark-item';
+                bookmarkItem.innerHTML = `
+                    <span>Page ${bookmark + 1}</span>
+                    <input type="number" value="${bookmark + 1}" min="1" max="1105" 
+                           onchange="editBookmark(${index}, this.value - 1)" />
+                    <div class="bookmark-controls">
+                        <button onclick="goToPage(${bookmark})">Go</button>
+                        <button onclick="removeBookmark(${index})">Remove</button>
+                    </div>
+                `;
+                bookmarkList.appendChild(bookmarkItem);
+            });
+        }
+
+        function addBookmark() {
+            if (!bookmarks.includes(currentIndex)) {
+                bookmarks.push(currentIndex);
+                bookmarks.sort((a, b) => a - b);
+                localStorage.setItem('comicBookmarks', JSON.stringify(bookmarks));
+                updateBookmarkList();
+                showTooltip('Bookmark added!');
+            } else {
+                showTooltip('Page already bookmarked!');
+            }
+        }
+
+        function removeBookmark(index) {
+            bookmarks.splice(index, 1);
+            localStorage.setItem('comicBookmarks', JSON.stringify(bookmarks));
+            updateBookmarkList();
+            showTooltip('Bookmark removed!');
+        }
+
+        function editBookmark(index, newPage) {
+            if (newPage >= 0 && newPage < 1105 && !bookmarks.includes(newPage)) {
+                bookmarks[index] = newPage;
+                localStorage.setItem('comicBookmarks', JSON.stringify(bookmarks));
+                updateBookmarkList();
+            } else {
+                showTooltip('Invalid page number or already bookmarked!');
+            }
+        }
+
+        function goToPage(page) {
+            const newPage = typeof page === 'number' ? page : parseInt(pageInput.value) - 1;
+            if (newPage >= 0 && newPage < 1105) {
+                currentIndex = newPage;
+                updateImage();
+            }
+        }
+
+        function toggleZoom() {
+            isZoomed = !isZoomed;
+            comicImage.classList.toggle('zoomed');
+        }
+
+        function showTooltip(message) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tooltip';
+            tooltip.textContent = message;
+            
+            tooltip.style.left = '50%';
+            tooltip.style.top = '10%';
+            tooltip.style.transform = 'translate(-50%, -50%)';
+            
+            document.body.appendChild(tooltip);
+            
+            setTimeout(() => {
+                tooltip.remove();
+            }, 2000);
+        }
+
+        // Touch Events for mobile navigation
+        let startX;
+        comicImage.addEventListener('touchstart', (event) => {
+            startX = event.touches[0].clientX;
+        });
+
+        comicImage.addEventListener('touchmove', (event) => {
+            const endX = event.touches[0].clientX;
+            if (startX - endX > 50) {
+                // Swipe left
+                nextButton.click();
+            } else if (endX - startX > 50) {
+                // Swipe right
+                prevButton.click();
+            }
+        });
+
+        // Event Listeners
+        prevButton.addEventListener('click', () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateImage();
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            if (currentIndex < 1104) {
+                currentIndex++;
+                updateImage();
+            }
+        });
+
+        fullscreenButton.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
+        darkModeButton.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+        });
+
+        bookmarkButton.addEventListener('click', addBookmark);
+        zoomButton.addEventListener('click', toggleZoom);
+        goToPageButton.addEventListener('click', () => goToPage());
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            switch(event.key) {
+                case 'ArrowLeft':
+                    prevButton.click();
+                    break;
+                case 'ArrowRight':
+                    nextButton.click();
+                    break;
+                case 'f':
+                case 'F':
+                    fullscreenButton.click();
+                    break;
+                case 'd':
+                case 'D':
+                    darkModeButton.click();
+                    break;
+                case 'b':
+                case 'B':
+                    bookmarkButton.click();
+                    break;
+                case 'z':
+                case 'Z':
+                    zoomButton.click();
+                    break;
+            }
+        });
+
+        // Load last page from localStorage
+        const lastPage = parseInt(localStorage.getItem('lastPage'));
+        if (!isNaN(lastPage)) {
+            currentIndex = lastPage;
+        }
+
+        // Initialize
+        updateImage();
+        updateBookmarkList();
+    </script>
+</body>
+</html>
